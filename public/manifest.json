@@ -4,7 +4,8 @@
     "version": "2.0.11",
     "description": "Group Gemini chats into local Projects.",
     "permissions": [
-        "storage"
+        "storage",
+        "bookmarks"
     ],
     "background": {
         "service_worker": "background.js",

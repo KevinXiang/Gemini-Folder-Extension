@@ -3,6 +3,7 @@ import { storageLocalGet, storageLocalSet } from './webext';
 
 export const STORAGE_KEY = 'gemini_projects_v1';
 export const CURRENT_SCHEMA_VERSION = 1;
+export const DUPLICATE_PROJECT_NAME_ERROR = 'A project with this name already exists.';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -20,19 +21,46 @@ export function isProjectIconStyle(value: unknown): value is ProjectIconStyle {
   return PROJECT_ICON_STYLES.some((style) => style === value);
 }
 
-export function normalizeChatUrl(value: unknown, conversationId: string): string | undefined {
+export function normalizeProjectNameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export function hasDuplicateProjectName(
+  projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>,
+  name: string,
+  excludeProjectId?: string | null
+): boolean {
+  const key = normalizeProjectNameKey(name);
+  if (!key) return false;
+  return projects.some(
+    (project) => project.id !== excludeProjectId && normalizeProjectNameKey(project.name) === key
+  );
+}
+
+function parseGeminiChatUrl(value: unknown): { conversationId: string; href: string } | undefined {
   if (typeof value !== 'string') return undefined;
   try {
     const origin = 'https://gemini.google.com';
     const url = new URL(value, origin);
     const path = /^\/(?:u\/\d+\/)?app\/([a-z0-9_-]+)\/?$/i.exec(url.pathname);
-    if (url.origin === origin && !url.username && !url.password && path?.[1] === conversationId) {
-      return url.href;
+    const conversationId = path?.[1];
+    if (url.origin === origin && !url.username && !url.password && conversationId && isSafeId(conversationId)) {
+      return { conversationId, href: url.href };
     }
   } catch {
     return undefined;
   }
   return undefined;
+}
+
+export function extractGeminiConversationIdFromUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) return undefined;
+  return parseGeminiChatUrl(value)?.conversationId;
+}
+
+export function normalizeChatUrl(value: unknown, conversationId: string): string | undefined {
+  const parsed = parseGeminiChatUrl(value);
+  return parsed?.conversationId === conversationId ? parsed.href : undefined;
 }
 
 export function createEmptyState(): StoredState {

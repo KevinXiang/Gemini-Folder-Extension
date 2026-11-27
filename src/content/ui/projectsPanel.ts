@@ -1,6 +1,6 @@
 import { ChatRef, DEFAULT_PROJECT_ICON_STYLE, Project, ProjectIcon, ProjectIconStyle, PROJECT_ICON_STYLES, RuntimeState } from '../../shared/types';
 import { exportAllData, triggerImport } from '../../shared/backup';
-import { isProjectIconStyle } from '../../shared/storage';
+import { DUPLICATE_PROJECT_NAME_ERROR, hasDuplicateProjectName, isProjectIconStyle } from '../../shared/storage';
 import {
   ADAPTIVE_PROJECT_COLOR, COLOR_OPTIONS, ICON_OPTIONS, MULTICOLOR_ICON_PALETTE,
   getIconLabel, getPaletteIconColor, renderIconSvg, resolveProjectIconColor
@@ -404,6 +404,7 @@ export function createProjectsPanel(options: ProjectsPanelOptions) {
     syncModalIconSelection();
     if (modalMode === 'create' && !inputDirty && input) {
       input.value = templateName;
+      modal.setError('');
       if (focusInput) {
         input.focus({ preventScroll: true });
         input.select();
@@ -453,6 +454,7 @@ export function createProjectsPanel(options: ProjectsPanelOptions) {
     if (input) {
       input.oninput = () => {
         inputDirty = true;
+        modal.setError('');
         confirm!.disabled = input.value.trim().length === 0;
       };
     }
@@ -461,6 +463,11 @@ export function createProjectsPanel(options: ProjectsPanelOptions) {
       if (modal.isSaving()) return;
       const name = input?.value.trim() ?? '';
       if (!name) {
+        return;
+      }
+      if (hasDuplicateProjectName(currentState?.projects ?? [], name, modalMode === 'edit' ? editingId : null)) {
+        modal.setError(DUPLICATE_PROJECT_NAME_ERROR);
+        input?.focus();
         return;
       }
 
@@ -488,7 +495,11 @@ export function createProjectsPanel(options: ProjectsPanelOptions) {
       } catch (error) {
         console.error('[Gemini Projects] Could not save project', error);
         modal.setSaving(false);
-        modal.setError('Could not save this project. Your changes are still here. Please try again.');
+        const message =
+          error instanceof Error && error.message === DUPLICATE_PROJECT_NAME_ERROR
+            ? DUPLICATE_PROJECT_NAME_ERROR
+            : 'Could not save this project. Your changes are still here. Please try again.';
+        modal.setError(message);
         input?.focus();
       }
     };
